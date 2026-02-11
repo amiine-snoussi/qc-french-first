@@ -6,17 +6,36 @@ import os
 import sys
 from urllib.parse import urlparse
 
+DEFAULT_MAX_SAMPLES = 15
+
 
 def pick_latest_run_dir(host: str) -> str | None:
     dirs = sorted([p for p in glob.glob(f"runs/{host}/*") if os.path.isdir(p)])
     return dirs[-1] if dirs else None
 
 
+def _strip_scheme_and_leading_slash(value: str) -> str:
+    if "://" in value:
+        _, _, without_scheme = value.partition("://")
+    else:
+        without_scheme = value
+    return without_scheme.removeprefix("/")
+
+
 def _host_from_input(base: str) -> str:
-    host = urlparse(base).netloc
-    if host:
-        return host
-    return base.replace("https://", "").replace("http://", "").split("/")[0]
+    """Extract a host from a base URL or hostname, returning empty string on failure."""
+    raw = base.strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    if parsed.netloc:
+        return parsed.netloc
+    if "://" not in raw:
+        parsed = urlparse(f"http://{raw}")
+        if parsed.netloc:
+            return parsed.netloc
+    fallback = _strip_scheme_and_leading_slash(raw)
+    return fallback.split("/")[0] if fallback else ""
 
 
 def _run_dirs_for_host(host: str) -> list[str]:
@@ -58,7 +77,7 @@ def _is_valid_diag(d: dict) -> bool:
     return isinstance(s, dict) and any(k in s for k in ("pages_total", "lang", "pairs", "status"))
 
 
-def _validate_run_dir(run_dir: str) -> int:
+def _validate_run_dir(run_dir: str, max_samples: int) -> int:
     diag_path = os.path.join(run_dir, "diagnostics.json")
     summary_path = os.path.join(run_dir, "summary.json")
 
@@ -106,7 +125,7 @@ def _validate_run_dir(run_dir: str) -> int:
         and r.get("status") in ("missing_fr", "candidate_fr")
         and r.get("priority") in ("P0", "P1")
     ]
-    p01 = p01[:15]
+    p01 = p01[:max_samples]
 
     if p01:
         print("\n[validate] TOP missing FR (P0/P1):")
@@ -134,18 +153,28 @@ def _validate_run_dir(run_dir: str) -> int:
 
 def main():
     ap = argparse.ArgumentParser(description="Validate scanner run outputs.")
-    ap.add_argument("base", nargs="?", help="Base URL or host to validate (latest run by default).")
+    ap.add_argument(
+        "base",
+        nargs="?",
+        help="Base URL or host to validate (validates latest run when provided without --all).",
+    )
     ap.add_argument(
         "--all",
         action="store_true",
         help="Validate all run directories (all hosts, or all runs for the given host).",
+    )
+    ap.add_argument(
+        "--max-samples",
+        type=int,
+        default=DEFAULT_MAX_SAMPLES,
+        help="Maximum P0/P1 missing/candidate FR rows to display per run.",
     )
     args = ap.parse_args()
 
     if not args.base and not args.all:
         ap.error("Provide a base URL/host or use --all to validate every run.")
 
-    host = _host_from_input(args.base.strip()) if args.base else None
+    host = _host_from_input(args.base) if args.base else None
     run_dirs = _collect_run_dirs(host, latest_only=not args.all)
 
     if not run_dirs:
@@ -157,7 +186,7 @@ def main():
 
     exit_codes = []
     for run_dir in run_dirs:
-        exit_codes.append(_validate_run_dir(run_dir))
+        exit_codes.append(_validate_run_dir(run_dir, args.max_samples))
 
     if len(run_dirs) > 1:
         failures = sum(1 for code in exit_codes if code != 0)
