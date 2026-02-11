@@ -1,4 +1,0 @@
-Site: https://vancouver.ca/
-Generated: 2026-02-11 00:43:23
-Platform: {'name': 'Unknown', 'confidence': 0.3}
-Score: 0 (Fail: no French detected)
