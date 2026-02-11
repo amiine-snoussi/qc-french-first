@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from urllib.parse import urlparse, urlunparse
 
 EN_PREFIXES = ["/en-ca", "/en-us", "/en"]
@@ -74,10 +74,22 @@ def build_pairs(pages: List[Dict[str, Any]], base_url: str) -> Dict[str, Any]:
 
     for pg in pages or []:
         url = pg.get("final_url") or pg.get("url")
+        url = _norm(str(url or ""))
         if not url:
             continue
-        url = _norm(str(url))
+
         path = _path(url)
+
+        # Only pair pages that are actually reachable. If EN page is 404, it should NOT trigger "missing FR".
+        if pg.get("error"):
+            continue
+        st = pg.get("status")
+        try:
+            st_i = int(st) if st is not None else None
+        except Exception:
+            st_i = None
+        if st_i is None or st_i >= 400:
+            continue
 
         # skip noisy checkout sessions
         if path.startswith("/checkouts/"):
@@ -141,9 +153,9 @@ def build_pairs(pages: List[Dict[str, Any]], base_url: str) -> Dict[str, Any]:
         })
 
     # sort: missing_fr first, then by priority
-    pr_rank = {"P0":0, "P1":1, "P2":2, "P3":3}
-    st_rank = {"missing_fr":0, "missing_en":1, "ok":2}
-    rows.sort(key=lambda r: (st_rank.get(r["status"],9), pr_rank.get(r["priority"],9), r["path"]))
+    pr_rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    st_rank = {"missing_fr": 0, "missing_en": 1, "ok": 2}
+    rows.sort(key=lambda r: (st_rank.get(r["status"], 9), pr_rank.get(r["priority"], 9), r["path"]))
 
     return {
         "summary": {

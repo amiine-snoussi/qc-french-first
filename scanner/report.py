@@ -23,6 +23,50 @@ def _load_json(path: str) -> dict:
         return {}
 
 
+def _rel_media_path(p: str, run_dir: str, project_root: str) -> str:
+    """Return a path relative to run_dir for HTML rendering.
+    Supports legacy values like "runs/<host>/<run>/screenshots/..." as well.
+    """
+    if not p:
+        return ""
+    p = str(p)
+    p_norm = p.replace("\\", "/")
+
+    abs_run = os.path.abspath(run_dir)
+    abs_root = os.path.abspath(project_root)
+
+    candidates = []
+    if os.path.isabs(p_norm):
+        candidates.append(p_norm)
+    else:
+        # Prefer interpreting as already relative to run_dir (new behavior)
+        candidates.append(os.path.abspath(os.path.join(abs_run, p_norm)))
+        # Fallback: legacy paths stored relative to project root ("runs/...")
+        candidates.append(os.path.abspath(os.path.join(abs_root, p_norm)))
+
+    for abs_path in candidates:
+        if os.path.exists(abs_path):
+            rel = os.path.relpath(abs_path, abs_run)
+            return rel.replace("\\", "/")
+
+    # Best-effort fallbacks
+    if p_norm.startswith("screenshots/"):
+        return p_norm
+    if p_norm.startswith("runs/") and "screenshots/" in p_norm:
+        i = p_norm.find("screenshots/")
+        return p_norm[i:]
+    return p_norm
+
+
+def _normalize_screenshot_fields(diag: dict, run_dir: str, project_root: str) -> dict:
+    if not isinstance(diag, dict):
+        return diag
+    for kp in (diag.get("key_pages") or []):
+        if isinstance(kp, dict) and kp.get("screenshot"):
+            kp["screenshot"] = _rel_media_path(kp["screenshot"], run_dir, project_root)
+    return diag
+
+
 def _is_full_diagnostics(payload: dict) -> bool:
     # minimal schema check, not “truthiness”
     if not isinstance(payload, dict):
@@ -261,7 +305,7 @@ def _build_key_pages_from_findings(findings: dict) -> list[dict]:
                 "status": st,
                 "en_url": kp.get("final_url") or kp.get("url") or kp.get("norm_url"),
                 "fr_url": fr.get("url"),
-                "screenshot": kp.get("screenshot_path"),
+                "screenshot": kp.get("screenshot_path") or kp.get("screenshot"),
             }
         )
 
@@ -407,6 +451,10 @@ def render_report(base_url: str, findings, scored, run_dir: str, cfg: dict) -> s
 
     diag = _ensure_stats(diag, findings)
 
+    # Normalize screenshot paths so report.html can render them with relative URLs.
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    diag = _normalize_screenshot_fields(diag, run_dir, root)
+
     score, score_label = _coverage_score(diag)
     signals = _make_signals(diag)
 
@@ -438,7 +486,6 @@ def render_report(base_url: str, findings, scored, run_dir: str, cfg: dict) -> s
         f.write(f"Platform: {platform}\n")
         f.write(f"Score: {score} ({score_label})\n")
 
-    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     templates_dir = os.path.join(root, "templates")
 
     env = Environment(

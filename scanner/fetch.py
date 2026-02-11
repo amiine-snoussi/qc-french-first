@@ -64,8 +64,12 @@ async def _fetch_one(context, idx: int, total: int, url: str, out_dir: str, cfg:
         shots_dir = os.path.join(out_dir, "screenshots")
         ensure_dir(shots_dir)
         fn = safe_filename(normalize_url(final_url))
-        screenshot_path = os.path.join(shots_dir, f"{fn}.png")
-        await page.screenshot(path=screenshot_path, full_page=True)
+
+        # Store screenshot paths *relative to run_dir* so report.html can render them reliably.
+        screenshot_rel = f"screenshots/{fn}.png"
+        screenshot_abs = os.path.join(out_dir, screenshot_rel)
+        await page.screenshot(path=screenshot_abs, full_page=True)
+        screenshot_path = screenshot_rel
 
         html = await page.content()
         try:

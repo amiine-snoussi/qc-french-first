@@ -1,4 +1,0 @@
-Site: https://boutiquecanicule.ca/
-Generated: 2026-02-10 23:50:56
-Platform: {'name': 'Shopify', 'confidence': 0.9}
-Score: 90 (Fail: 2 key pages missing French)

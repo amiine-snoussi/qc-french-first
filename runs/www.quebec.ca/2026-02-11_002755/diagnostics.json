@@ -1,0 +1,116 @@
+{
+  "base_url": "https://www.quebec.ca/",
+  "origin": "https://www.quebec.ca",
+  "platform": {
+    "name": "Unknown",
+    "confidence": 0.3
+  },
+  "homepage_switch": "nav",
+  "stats": {
+    "pages_total": 59,
+    "status": {
+      "2xx": 27,
+      "3xx": 0,
+      "4xx": 32,
+      "5xx": 0,
+      "other": 0,
+      "none": 0
+    },
+    "lang": {
+      "en": 1,
+      "fr": 58,
+      "unknown": 0
+    },
+    "pairs": {
+      "total_pairs": 1,
+      "missing_fr_total": 0,
+      "missing_fr_key": 0,
+      "missing_en_total": 0
+    }
+  },
+  "fix_first": [],
+  "pairs_sample": [
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/en",
+      "fr_url": "https://www.quebec.ca/"
+    }
+  ],
+  "key_pages": [
+    {
+      "key": "cart",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/cart",
+      "fr_url": "https://www.quebec.ca/fr/cart",
+      "screenshot": "screenshots/https_www.quebec.ca_cart.png"
+    },
+    {
+      "key": "checkout",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/checkout",
+      "fr_url": "https://www.quebec.ca/fr/checkout",
+      "screenshot": "screenshots/https_www.quebec.ca_checkout.png"
+    },
+    {
+      "key": "contact",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/contact",
+      "fr_url": "https://www.quebec.ca/fr/contact",
+      "screenshot": "screenshots/https_www.quebec.ca_contact.png"
+    },
+    {
+      "key": "home",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/",
+      "fr_url": "https://www.quebec.ca/",
+      "screenshot": "screenshots/https_www.quebec.ca.png"
+    },
+    {
+      "key": "about",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/about",
+      "fr_url": "https://www.quebec.ca/fr/about",
+      "screenshot": "screenshots/https_www.quebec.ca_about.png"
+    },
+    {
+      "key": "faq",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/faq",
+      "fr_url": "https://www.quebec.ca/fr/faq",
+      "screenshot": "screenshots/https_www.quebec.ca_faq.png"
+    },
+    {
+      "key": "products",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/collection",
+      "fr_url": "https://www.quebec.ca/fr/collection",
+      "screenshot": "screenshots/https_www.quebec.ca_collection.png"
+    },
+    {
+      "key": "returns",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/policies",
+      "fr_url": "https://www.quebec.ca/fr/policies",
+      "screenshot": "screenshots/https_www.quebec.ca_policies.png"
+    },
+    {
+      "key": "services",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://www.quebec.ca/service",
+      "fr_url": "https://www.quebec.ca/fr/service",
+      "screenshot": "screenshots/https_www.quebec.ca_service.png"
+    }
+  ]
+}
