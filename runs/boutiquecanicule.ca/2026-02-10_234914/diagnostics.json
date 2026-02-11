@@ -1,0 +1,349 @@
+{
+  "base_url": "https://boutiquecanicule.ca/",
+  "origin": "https://boutiquecanicule.ca",
+  "platform": {
+    "name": "Shopify",
+    "confidence": 0.9
+  },
+  "homepage_switch": "header",
+  "stats": {
+    "pages_total": 81,
+    "status": {
+      "2xx": 61,
+      "3xx": 0,
+      "4xx": 20,
+      "5xx": 0,
+      "other": 0,
+      "none": 0
+    },
+    "lang": {
+      "en": 30,
+      "fr": 51,
+      "unknown": 0
+    },
+    "pairs": {
+      "total_pairs": 30,
+      "missing_fr_total": 2,
+      "missing_fr_key": 2,
+      "missing_en_total": 0
+    }
+  },
+  "fix_first": [
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/contact",
+      "status": "candidate_fr",
+      "en_url": "https://boutiquecanicule.ca/contact",
+      "fr_url": "https://boutiquecanicule.ca/fr/contact"
+    },
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/contact-us",
+      "status": "candidate_fr",
+      "en_url": "https://boutiquecanicule.ca/contact-us",
+      "fr_url": "https://boutiquecanicule.ca/fr/contact-us"
+    }
+  ],
+  "pairs_sample": [
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/contact",
+      "status": "candidate_fr",
+      "en_url": "https://boutiquecanicule.ca/contact",
+      "fr_url": "https://boutiquecanicule.ca/fr/contact"
+    },
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/contact-us",
+      "status": "candidate_fr",
+      "en_url": "https://boutiquecanicule.ca/contact-us",
+      "fr_url": "https://boutiquecanicule.ca/fr/contact-us"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-us",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca"
+    },
+    {
+      "priority": "P1",
+      "key_type": "about",
+      "path": "/en-ca/pages/about-us",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/about-us",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/about-us"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/pages/brand",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/brand",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/brand"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/pages/collection-bundle",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/collection-bundle",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/collection-bundle"
+    },
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/en-ca/pages/contact",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/contact",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/contact"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/pages/data-sharing-opt-out",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/data-sharing-opt-out",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/data-sharing-opt-out"
+    },
+    {
+      "priority": "P1",
+      "key_type": "faq",
+      "path": "/en-ca/pages/faq",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/faq",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/faq"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/pages/soins-postoperatoires",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/soins-postoperatoires",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/soins-postoperatoires"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/007150",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/007150",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/007150"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/007152",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/007152",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/007152"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0100419",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0100419",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0100419"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0163150",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0163150",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0163150"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0163256",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0163256",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0163256"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0163386",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0163386",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0163386"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0163530",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0163530",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0163530"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0255-580",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0255-580",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0255-580"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0263258",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0263258",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0263258"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0310f",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0310f",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0310f"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0500410",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0500410",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0500410"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-ca/products/0502380",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/products/0502380",
+      "fr_url": "https://boutiquecanicule.ca/en-ca/products/0502380"
+    },
+    {
+      "priority": "P1",
+      "key_type": "about",
+      "path": "/en-us/pages/about-us",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/about-us",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/about-us"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-us/pages/brand",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/brand",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/brand"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-us/pages/collection-bundle",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/collection-bundle",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/collection-bundle"
+    },
+    {
+      "priority": "P0",
+      "key_type": "contact",
+      "path": "/en-us/pages/contact",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/contact",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/contact"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-us/pages/data-sharing-opt-out",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/data-sharing-opt-out",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/data-sharing-opt-out"
+    },
+    {
+      "priority": "P1",
+      "key_type": "faq",
+      "path": "/en-us/pages/faq",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/faq",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/faq"
+    },
+    {
+      "priority": "P2",
+      "key_type": "-",
+      "path": "/en-us/pages/soins-postoperatoires",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-us/pages/soins-postoperatoires",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/soins-postoperatoires"
+    }
+  ],
+  "key_pages": [
+    {
+      "key": "cart",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/cart",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/cart",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_cart.png"
+    },
+    {
+      "key": "contact",
+      "priority": "P0",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/en-ca/pages/contact",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/contact",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_en-ca_pages_contact.png"
+    },
+    {
+      "key": "about",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/pages/about-us",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/about-us",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_pages_about-us.png"
+    },
+    {
+      "key": "faq",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/pages/faq",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/faq",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_pages_faq.png"
+    },
+    {
+      "key": "products",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/collections",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/collections",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_collections.png"
+    },
+    {
+      "key": "returns",
+      "priority": "P1",
+      "status": "ok",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/policies",
+      "fr_url": "https://boutiquecanicule.ca/fr-ca/pages/brand",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_policies.png"
+    },
+    {
+      "key": "services",
+      "priority": "P1",
+      "status": "candidate_fr",
+      "en_url": "https://boutiquecanicule.ca/fr-ca/service",
+      "fr_url": "https://boutiquecanicule.ca/customer_authentication/redirect?locale=fr&region_country=CA",
+      "screenshot": "runs/boutiquecanicule.ca/2026-02-10_234914/screenshots/https_boutiquecanicule.ca_fr-ca_service.png"
+    }
+  ]
+}

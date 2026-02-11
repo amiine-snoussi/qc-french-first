@@ -1,0 +1,83 @@
+crawler:
+  max_pages: 140
+  max_depth: 3
+  timeout_ms: 25000
+  concurrency: 6
+  # Phase-2 confirm: fetch inferred FR candidates to avoid "candidate not crawled" false risk.
+  confirm_candidates: true
+  confirm_only_key: true
+  confirm_candidates_max: 20
+  user_agent: QC-FrenchFirst-Scanner/1.0 (+self-audit; not legal advice)
+  respect_robots: false
+  hard_timeout_s: 35
+  skip_url_contains:
+  - /checkouts/
+  fast_url_contains:
+  - /checkout
+heuristics:
+  langid_min_conf: 0.82
+  key_paths:
+  - /
+  - /contact
+  - /contact-us
+  - /about
+  - /about-us
+  - /services
+  - /service
+  - /products
+  - /product
+  - /collections
+  - /collection
+  - /shop
+  - /cart
+  - /checkout
+  - /faq
+  - /help
+  - /returns
+  - /shipping
+  - /policies
+  - /privacy
+  - /terms
+  french_home_variants:
+  - /fr
+  - /fr/
+  - /fr-ca
+  - /fr-ca/
+  - /français
+  - /francais
+  english_home_variants:
+  - /en
+  - /en/
+  - /en-ca
+  - /en-ca/
+  - /en-us
+  - /en-us/
+  leakage:
+    chunk_min_chars: 80
+    en_ratio_warn: 0.12
+    sim_untranslated: 0.85
+output:
+  keep_html_snapshots: false
+discover:
+  use_playwright: true
+  # Optional preflight GET / to guess platform and reduce irrelevant probe noise.
+  prefetch_platform: true
+  max_pages: 50
+  max_depth: 2
+  timeout_ms: 12000
+  hard_timeout_s: 35
+  skip_url_contains:
+  - /checkouts/
+  max_queue: 250
+  exclude_contains:
+  - /checkouts/
+  - /account
+  - /search
+  - /blogs/
+  - /blog/
+  - /collections/
+  - /products/
+  - /sitemap
+  - .xml
+  product_sample_n: 12
+  collection_sample_n: 6

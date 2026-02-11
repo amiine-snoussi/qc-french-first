@@ -1,0 +1,169 @@
+import os, json
+from datetime import datetime
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+def _load_json(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _rel_under(run_dir: str, maybe_path: str | None) -> str | None:
+    if not maybe_path:
+        return None
+    try:
+        rp = os.path.realpath(maybe_path)
+        rr = os.path.realpath(run_dir)
+        if rp.startswith(rr + os.sep):
+            return os.path.relpath(rp, rr).replace("\\", "/")
+    except Exception:
+        pass
+    return maybe_path
+
+def _coverage_score(diag: dict) -> tuple[int, str]:
+    s = diag.get("stats", {})
+    pairs = s.get("pairs", {}) or {}
+    lang = s.get("lang", {}) or {}
+    fr_pages = int(lang.get("fr", 0) or 0)
+    missing_key = int(pairs.get("missing_fr_key", 0) or 0)
+    missing_total = int(pairs.get("missing_fr_total", 0) or 0)
+
+    if fr_pages == 0:
+        return (0, "Fail: no French detected")
+
+    score = 100
+    score -= min(60, missing_key * 6)                      # key pages hurt a lot
+    score -= min(20, max(0, missing_total - missing_key) // 10)  # overall coverage hurt a bit
+    score = max(0, min(100, score))
+
+    if score >= 85:
+        label = "Good"
+    elif score >= 60:
+        label = "Needs work"
+    else:
+        label = "Bad"
+
+    if missing_key > 0:
+        label = f"{label} (missing key FR)"
+    return (score, label)
+
+def _write_summary(artifacts_dir: str, site: str, generated: str, platform: str, diag: dict, score: int, score_label: str, fix_first: list, key_rows: list):
+    s = diag.get("stats", {}) or {}
+    out = {
+        "site": site,
+        "generated": generated,
+        "platform": platform,
+        "score": score,
+        "score_label": score_label,
+        "stats": s,
+        "fix_first": fix_first,
+        "key_pages": key_rows,
+    }
+
+    with open(os.path.join(artifacts_dir, "summary.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+
+    # Human-readable text
+    pairs = (s.get("pairs") or {})
+    lang = (s.get("lang") or {})
+    status = (s.get("status") or {})
+
+    lines = []
+    lines.append(f"Site: {site}")
+    lines.append(f"Generated: {generated}")
+    lines.append(f"Platform: {platform}")
+    lines.append("")
+    lines.append(f"Pages total: {s.get('pages_total')}")
+    lines.append(f"HTTP: 2xx={status.get('2xx',0)} 3xx={status.get('3xx',0)} 4xx={status.get('4xx',0)} 5xx={status.get('5xx',0)} other={status.get('other',0)} none={status.get('none',0)}")
+    lines.append(f"Lang: en={lang.get('en',0)} fr={lang.get('fr',0)} unknown={lang.get('unknown',0)}")
+    lines.append(f"Pairs: total={pairs.get('total_pairs',0)} missing_fr_key={pairs.get('missing_fr_key',0)} missing_fr_total={pairs.get('missing_fr_total',0)} missing_en_total={pairs.get('missing_en_total',0)}")
+    lines.append("")
+    lines.append(f"Score: {score} ({score_label})")
+    lines.append("")
+    lines.append("Fix-first (top):")
+    if fix_first:
+        for r in fix_first[:12]:
+            lines.append(f"  {r.get('priority')} {r.get('key_type')} {r.get('path')} -> {r.get('en_url')}")
+    else:
+        lines.append("  none")
+
+    with open(os.path.join(artifacts_dir, "summary.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+def render_report(base_url: str, findings: dict, scored: dict, artifacts_dir: str, cfg: dict) -> str:
+    diag_path = os.path.join(artifacts_dir, "diagnostics.json")
+    diag = _load_json(diag_path)
+    stats = diag.get("stats", {}) or {}
+
+    # Map url -> screenshot (if your fetch stored screenshot paths per page)
+    shot_by_url = {}
+    for p in (findings.get("pages", []) or []):
+        u = p.get("final_url") or p.get("url")
+        sp = p.get("screenshot_path")
+        if u and sp:
+            shot_by_url[u] = sp
+
+    # Key pages rows from diagnostics
+    key_pages = diag.get("key_pages", {}) or {}
+    order = ["home","products","services","contact","cart","faq","returns","about"]
+    key_rows = []
+    for k in order:
+        if k not in key_pages:
+            continue
+        v = key_pages.get(k) or {}
+        pair = v.get("pair") or {}
+        final_url = v.get("final_url")
+        en_url = pair.get("en_url")
+        fr_url = pair.get("fr_url")
+        shot = shot_by_url.get(final_url) or shot_by_url.get(en_url) or shot_by_url.get(fr_url)
+        key_rows.append({
+            "key": k,
+            "core_path": v.get("core_path"),
+            "priority": pair.get("priority") or "-",
+            "status": pair.get("status") or "unknown",
+            "en_url": en_url,
+            "fr_url": fr_url,
+            "detected_lang": v.get("lang"),
+            "http_status": v.get("status"),
+            "screenshot": _rel_under(artifacts_dir, shot),
+        })
+
+    # Fix-first list from pairs_sample
+    pairs_rows = diag.get("pairs_sample", []) or []
+    fix_first = [r for r in pairs_rows if r.get("status") == "missing_fr" and r.get("priority") == "P0"]
+    if len(fix_first) < 8:
+        fix_first += [r for r in pairs_rows if r.get("status") == "missing_fr" and r.get("priority") == "P1"]
+    fix_first = fix_first[:12]
+
+    score, score_label = _coverage_score(diag)
+
+    generated = cfg.get("generated") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    platform = findings.get("platform") or "-"
+
+    # Always write summary artifacts (control/state output)
+    _write_summary(artifacts_dir, base_url, generated, platform, diag, score, score_label, fix_first, key_rows)
+
+    # Render HTML
+    root = os.path.dirname(os.path.dirname(__file__))  # project root
+    tpl_dir = os.path.join(root, "templates")
+    env = Environment(loader=FileSystemLoader(tpl_dir), autoescape=select_autoescape(["html"]))
+    tpl = env.get_template("report.html")
+
+    html = tpl.render(
+        site=base_url,
+        generated=generated,
+        platform=platform,
+        homepage_switch=findings.get("homepage_switch") or "-",
+        stats=stats,
+        score=score,
+        score_label=score_label,
+        fix_first=fix_first,
+        key_rows=key_rows,
+        pairs_rows=pairs_rows,
+    )
+
+    out_path = os.path.join(artifacts_dir, "report.html")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    return out_path

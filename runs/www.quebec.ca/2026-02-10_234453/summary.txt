@@ -1,0 +1,4 @@
+Site: https://www.quebec.ca/
+Generated: 2026-02-10 23:45:23
+Platform: {'name': 'Unknown', 'confidence': 0.3}
+Score: 100 (Pass)

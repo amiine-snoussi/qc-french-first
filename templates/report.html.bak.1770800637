@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>QC French-first Scan</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111b2e;
+      --text:#e5e7eb; --muted:#9ca3af; --line:#22314f;
+      --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --pill:#0b244a;
+    }
+    body{margin:0;background:linear-gradient(180deg,#070b12,var(--bg));color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+    a{color:#93c5fd;text-decoration:none} a:hover{text-decoration:underline}
+    .wrap{max-width:1100px;margin:22px auto;padding:0 16px;}
+    .top{display:flex;gap:16px;align-items:stretch;justify-content:space-between;margin-bottom:16px;}
+    .brand{background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:18px;padding:16px;flex:1;}
+    .brand h1{margin:0;font-size:22px}
+    .sub{margin-top:6px;color:var(--muted);font-size:13px;line-height:1.35}
+    .scorebox{min-width:210px;background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;justify-content:center;align-items:center}
+    .score{font-size:44px;font-weight:800;line-height:1}
+    .label{margin-top:6px;font-weight:700}
+    .good{color:var(--good)} .moderate{color:var(--warn)} .high{color:var(--bad)} .critical{color:var(--bad)}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;margin-bottom:14px;}
+    .card{background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:18px;padding:16px;}
+    .card h2{margin:0 0 10px 0;font-size:16px}
+    .muted{color:var(--muted)}
+    .small{font-size:13px}
+    .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0 0}
+    .pill{background:var(--pill);border:1px solid var(--line);padding:6px 10px;border-radius:999px;font-size:12px;color:#c7d2fe}
+    .issues{margin:0;padding-left:18px}
+    .issues li{margin:10px 0}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:800;margin-right:8px;border:1px solid var(--line);background:rgba(255,255,255,0.04)}
+    .P0{color:#fecaca;border-color:#7f1d1d;background:rgba(239,68,68,0.10)}
+    .P1{color:#fde68a;border-color:#78350f;background:rgba(245,158,11,0.10)}
+    .P2{color:#bfdbfe;border-color:#1e3a8a;background:rgba(96,165,250,0.10)}
+    .tablewrap{overflow:auto;border-radius:14px;border:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;min-width:860px;background:rgba(0,0,0,0.08)}
+    th,td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+    th{position:sticky;top:0;background:rgba(15,23,42,0.95);text-align:left;font-size:12px;color:#cbd5e1;letter-spacing:.02em}
+    tr:hover td{background:rgba(255,255,255,0.03)}
+    .k{color:#a5b4fc;font-weight:800}
+    .status-ok{color:var(--good);font-weight:900}
+    .status-missing{color:var(--bad);font-weight:900}
+    .filters{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+    .btn{cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--text);padding:7px 10px;border-radius:10px;font-weight:800;font-size:12px}
+    .btn:hover{background:rgba(255,255,255,0.07)}
+    details>summary{cursor:pointer;font-weight:900}
+    .thumb{max-width:240px;border-radius:12px;border:1px solid var(--line)}
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr} .scorebox{min-width:unset} table{min-width:760px} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand">
+      <h1>QC “French-first” Website Scan</h1>
+      <div class="sub">
+        Site: <a href="{{ base_url }}" target="_blank">{{ base_url }}</a><br/>
+        Generated: {{ generated_at }}<br/>
+        Platform: {{ platform.name if platform and platform.name else "unknown" }}
+      </div>
+      <div class="pillrow">
+        <span class="pill">Has any French: {{ "yes" if signals.has_any_french else "no" }}</span>
+        <span class="pill">Homepage switch: {{ signals.home_switch_location }}</span>
+        <span class="pill">Pairs: {{ pair_summary.total_pairs if pair_summary else 0 }}</span>
+      </div>
+    </div>
+
+    {% set lbl = scored.label|lower %}
+    {% set cls = "good" if "good" in lbl else ("moderate" if "moderate" in lbl else ("high" if "high" in lbl else "critical")) %}
+    <div class="scorebox">
+      <div class="score {{ cls }}">{{ scored.score }}</div>
+      <div class="label {{ cls }}">{{ scored.label }}</div>
+      <div class="muted small" style="margin-top:6px;text-align:center">Heuristic monitoring / self-audit (not legal advice)</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Fix-first checklist</h2>
+      {% if scored.issues|length == 0 %}
+        <div class="muted small">No issues detected by the current heuristics.</div>
+      {% else %}
+        <ol class="issues">
+          {% for i in scored.issues[:12] %}
+            <li>
+              <span class="badge {{ i.priority }}">{{ i.priority }}</span>
+              <b>{{ i.title }}</b>
+              <div class="muted small" style="margin-top:4px">{{ i.detail }}</div>
+            </li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>What matters most</h2>
+      <div class="muted small">
+        <div><b>P0</b> = homepage FR missing / no easy switch / key pages missing FR</div>
+        <div style="margin-top:8px"><b>Pairs matrix</b>: EN page exists → is there a FR counterpart?</div>
+        <div style="margin-top:8px"><b>Leakage</b>: English chunks inside FR pages or FR looks identical to EN.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Language coverage matrix (EN ↔ FR)</h2>
+    <div class="pillrow">
+      <span class="pill">Missing FR total: {{ pair_summary.missing_fr_total if pair_summary else 0 }}</span>
+      <span class="pill">Missing FR (key): {{ pair_summary.missing_fr_key if pair_summary else 0 }}</span>
+      <span class="pill">Missing EN total: {{ pair_summary.missing_en_total if pair_summary else 0 }}</span>
+    </div>
+
+    <div class="filters">
+      <button class="btn" onclick="setFilter('all')">All</button>
+      <button class="btn" onclick="setFilter('missing_fr')">Missing FR</button>
+      <button class="btn" onclick="setFilter('missing_en')">Missing EN</button>
+      <button class="btn" onclick="setFilter('ok')">OK</button>
+    </div>
+
+    <div class="tablewrap">
+      <table id="pairsTable">
+        <thead>
+          <tr>
+            <th>Priority</th>
+            <th>Path</th>
+            <th>Key type</th>
+            <th>Status</th>
+            <th>EN</th>
+            <th>FR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in pair_rows[:300] %}
+          <tr data-status="{{ r.status }}">
+            <td><span class="badge {{ r.priority }}">{{ r.priority }}</span></td>
+            <td class="small"><span class="k">{{ r.path }}</span></td>
+            <td class="small">{{ r.key_type if r.key_type else "—" }}</td>
+            <td class="small">
+              {% if r.status == "ok" %}
+                <span class="status-ok">OK</span>
+              {% elif r.status == "missing_fr" %}
+                <span class="status-missing">Missing FR</span>
+              {% elif r.status == "missing_en" %}
+                <span class="status-missing">Missing EN</span>
+              {% else %}
+                <span class="muted">Unknown</span>
+              {% endif %}
+            </td>
+            <td class="small">{% if r.en_url %}<a href="{{ r.en_url }}" target="_blank">{{ r.en_url }}</a>{% else %}—{% endif %}</td>
+            <td class="small">{% if r.fr_url %}<a href="{{ r.fr_url }}" target="_blank">{{ r.fr_url }}</a>{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted small" style="margin-top:10px">We sample products/collections on huge stores to keep weekly scans fast.</div>
+  </div>
+
+  <div class="card">
+    <h2>Key pages (quick)</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Detected page</th>
+            <th>Detected lang</th>
+            <th>FR counterpart</th>
+            <th>Lang switch</th>
+            <th>Screenshot</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for kt in key_order %}
+            {% set p = key_pages.get(kt) %}
+            {% if p %}
+            <tr>
+              <td class="small"><span class="k">{{ kt }}</span></td>
+              <td class="small"><a href="{{ p.final_url }}" target="_blank">{{ p.final_url }}</a></td>
+              <td class="small">{{ p.lang }}{% if p.html_lang %} (html={{ p.html_lang }}){% endif %}</td>
+              <td class="small">
+                {% if p.french and p.french.url %}
+                  {{ p.french.status }}: <a href="{{ p.french.url }}" target="_blank">{{ p.french.url }}</a>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="small">{{ p.switch.location if p.switch else "none" }}</td>
+              <td class="small">
+                {% if p.screenshot_rel %}
+                  <a href="{{ p.screenshot_rel }}" target="_blank"><img class="thumb" src="{{ p.screenshot_rel }}" alt="screenshot"/></a>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>English leakage inside French pages</h2>
+    <div class="muted small">Flags English chunks in FR pages, or FR pages that look identical to EN (likely not translated).</div>
+    {% if leak_pages|length == 0 %}
+      <div class="muted small" style="margin-top:10px">No FR pages with leakage metrics (or none detected).</div>
+    {% else %}
+      <div class="tablewrap" style="margin-top:10px">
+        <table>
+          <thead>
+            <tr>
+              <th>FR page</th>
+              <th>EN ratio</th>
+              <th>Sim to EN</th>
+              <th>EN counterpart</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in leak_pages %}
+              {% set leak = p.leak %}
+              <tr>
+                <td class="small"><a href="{{ p.final_url }}" target="_blank">{{ p.final_url }}</a></td>
+                <td class="small">{{ leak.en_ratio }} ({{ leak.en_chunks }}/{{ leak.chunks_total }})</td>
+                <td class="small">{{ leak.sim_to_en if leak.sim_to_en is not none else "—" }}</td>
+                <td class="small">{% if leak.en_counterpart %}<a href="{{ leak.en_counterpart }}" target="_blank">{{ leak.en_counterpart }}</a>{% else %}—{% endif %}</td>
+                <td class="small">{% if leak.snippets and leak.snippets|length>0 %}{{ leak.snippets[0] }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <details class="card">
+    <summary>All crawled pages (debug)</summary>
+    <div class="muted small" style="margin-top:10px">Use this to diagnose false positives / missed pages.</div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table>
+        <thead>
+          <tr>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Lang</th>
+            <th>Key</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pages %}
+          <tr>
+            <td class="small"><a href="{{ p.final_url }}" target="_blank">{{ p.final_url }}</a></td>
+            <td class="small">{{ p.status }}</td>
+            <td class="small">{{ p.lang }}</td>
+            <td class="small">{{ p.key_type if p.key_type else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+</div>
+
+<script>
+function setFilter(mode){
+  const rows = document.querySelectorAll("#pairsTable tbody tr");
+  rows.forEach(r=>{
+    const st = r.getAttribute("data-status");
+    r.style.display = (mode==="all" || st===mode) ? "" : "none";
+  });
+}
+</script>
+</body>
+</html>
