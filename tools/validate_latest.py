@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import glob
 import json
 import os
@@ -9,6 +10,37 @@ from urllib.parse import urlparse
 def pick_latest_run_dir(host: str) -> str | None:
     dirs = sorted([p for p in glob.glob(f"runs/{host}/*") if os.path.isdir(p)])
     return dirs[-1] if dirs else None
+
+
+def _host_from_input(base: str) -> str:
+    host = urlparse(base).netloc
+    if host:
+        return host
+    return base.replace("https://", "").replace("http://", "").split("/")[0]
+
+
+def _run_dirs_for_host(host: str) -> list[str]:
+    return sorted([p for p in glob.glob(f"runs/{host}/*") if os.path.isdir(p)])
+
+
+def _collect_run_dirs(host: str | None, latest_only: bool) -> list[str]:
+    if host:
+        if latest_only:
+            run_dir = pick_latest_run_dir(host)
+            return [run_dir] if run_dir else []
+        return _run_dirs_for_host(host)
+
+    host_dirs = sorted([p for p in glob.glob("runs/*") if os.path.isdir(p)])
+    run_dirs: list[str] = []
+    for host_dir in host_dirs:
+        host_name = os.path.basename(host_dir)
+        if latest_only:
+            run_dir = pick_latest_run_dir(host_name)
+            if run_dir:
+                run_dirs.append(run_dir)
+        else:
+            run_dirs.extend(_run_dirs_for_host(host_name))
+    return run_dirs
 
 
 def _load_json(path: str) -> dict:
@@ -26,19 +58,7 @@ def _is_valid_diag(d: dict) -> bool:
     return isinstance(s, dict) and any(k in s for k in ("pages_total", "lang", "pairs", "status"))
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("usage: python tools/validate_latest.py https://example.com/")
-        sys.exit(2)
-
-    base = sys.argv[1].strip()
-    host = urlparse(base).netloc or base.replace("https://", "").replace("http://", "").split("/")[0]
-
-    run_dir = pick_latest_run_dir(host)
-    if not run_dir:
-        print(f"[validate] No runs found under runs/{host}/")
-        sys.exit(1)
-
+def _validate_run_dir(run_dir: str) -> int:
     diag_path = os.path.join(run_dir, "diagnostics.json")
     summary_path = os.path.join(run_dir, "summary.json")
 
@@ -53,9 +73,9 @@ def main():
             source = summary_path
 
     if not _is_valid_diag(d):
-        print(f"[validate] No usable diagnostics found in latest run: {run_dir}")
+        print(f"[validate] No usable diagnostics found in run: {run_dir}")
         print(f"[validate] Tried: {diag_path} and {summary_path}")
-        sys.exit(1)
+        return 1
 
     s = d.get("stats", {}) or {}
     pairs = s.get("pairs", {}) or {}
@@ -81,10 +101,10 @@ def main():
 
     rows = d.get("pairs_sample") or d.get("pairs_rows") or []
     p01 = [
-    r for r in rows
-    if isinstance(r, dict)
-    and r.get("status") in ("missing_fr", "candidate_fr")
-    and r.get("priority") in ("P0", "P1")
+        r for r in rows
+        if isinstance(r, dict)
+        and r.get("status") in ("missing_fr", "candidate_fr")
+        and r.get("priority") in ("P0", "P1")
     ]
     p01 = p01[:15]
 
@@ -109,7 +129,41 @@ def main():
         code = 0
 
     print(f"\n[validate] VERDICT: {verdict}")
-    sys.exit(code)
+    return code
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Validate scanner run outputs.")
+    ap.add_argument("base", nargs="?", help="Base URL or host to validate (latest run by default).")
+    ap.add_argument(
+        "--all",
+        action="store_true",
+        help="Validate all run directories (all hosts, or all runs for the given host).",
+    )
+    args = ap.parse_args()
+
+    if not args.base and not args.all:
+        ap.error("Provide a base URL/host or use --all to validate every run.")
+
+    host = _host_from_input(args.base.strip()) if args.base else None
+    run_dirs = _collect_run_dirs(host, latest_only=not args.all)
+
+    if not run_dirs:
+        if host:
+            print(f"[validate] No runs found under runs/{host}/")
+        else:
+            print("[validate] No runs found under runs/")
+        sys.exit(1)
+
+    exit_codes = []
+    for run_dir in run_dirs:
+        exit_codes.append(_validate_run_dir(run_dir))
+
+    if len(run_dirs) > 1:
+        failures = sum(1 for code in exit_codes if code != 0)
+        print(f"\n[validate] Completed {len(run_dirs)} run(s); failures={failures}")
+
+    sys.exit(1 if any(code != 0 for code in exit_codes) else 0)
 
 
 if __name__ == "__main__":
