@@ -6,6 +6,9 @@ langid
 pyyaml
 lxml
 
+# Report rendering
+jinja2
+
 # API layer
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0

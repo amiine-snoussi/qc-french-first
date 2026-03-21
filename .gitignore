@@ -10,3 +10,6 @@ dist/
 build/
 *.log
 runs/
+frontend/node_modules/
+frontend/dist/
+frontend/.next/*
