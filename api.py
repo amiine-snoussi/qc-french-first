@@ -9,7 +9,8 @@ Endpoints:
                            "score": 82, "label": "Good", "issues": [...],
                            "report_url": "/reports/<job_id>.html" }
 
-  GET  /reports/{filename}  → serves the HTML report file
+  GET  /reports/pdf/{job_id} → PDF version of the HTML report (weasyprint)
+  GET  /reports/{filename}   → serves the HTML report file
 
 Jobs run in a background thread. State is persisted in jobs.sqlite so
 restarts don't lose in-flight results.
@@ -283,11 +284,55 @@ def get_scan(job_id: str) -> Dict[str, Any]:
         result["label"]      = row["label"]
         result["issues"]     = _json.loads(row["issues_json"] or "[]")
         result["report_url"] = f"/reports/{job_id}.html"
+        result["pdf_url"]    = f"/reports/pdf/{job_id}"
 
     if row["status"] == "error":
         result["error"] = row["error"]
 
     return result
+
+
+@app.get("/reports/pdf/{job_id}")
+def serve_report_pdf(job_id: str) -> FileResponse:
+    """Convert HTML report to PDF via weasyprint and serve it.
+
+    The PDF is cached on first generation so subsequent requests are instant.
+    """
+    # Sanitize job_id (must look like a UUID, no path traversal)
+    import re as _re
+    if not _re.match(r"^[a-f0-9\-]{36}$", job_id):
+        raise HTTPException(status_code=400, detail="Invalid job_id format")
+
+    pdf_path = REPORTS_DIR / f"{job_id}.pdf"
+    html_path = REPORTS_DIR / f"{job_id}.html"
+
+    # Serve cached PDF if it exists
+    if pdf_path.exists() and pdf_path.is_file():
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"qc-french-first-{job_id[:8]}.pdf",
+        )
+
+    # HTML source must exist
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="HTML report not found — run a scan first")
+
+    # Generate PDF
+    try:
+        from weasyprint import HTML as WeasyHTML
+        WeasyHTML(filename=str(html_path)).write_pdf(str(pdf_path))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF generation failed: {str(exc)[:200]}",
+        )
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"qc-french-first-{job_id[:8]}.pdf",
+    )
 
 
 @app.get("/reports/{filename}")

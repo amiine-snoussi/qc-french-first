@@ -21,6 +21,7 @@ interface ScanResult {
   label?: string;
   issues?: Issue[];
   report_url?: string;
+  pdf_url?: string;
   error?: string;
   created_at?: string;
 }
@@ -189,8 +190,13 @@ export default function ScanResultPage() {
                   rel="noopener noreferrer"
                   className="btn btn-outline"
                 >
-                  📄 Télécharger le rapport HTML
+                  📄 Rapport HTML
                 </a>
+              )}
+              {data.pdf_url && (
+                <span className="btn btn-pro-locked" title="Disponible avec le forfait Pro (79$/mois)">
+                  🔒 Télécharger PDF <span className="pro-badge">PRO</span>
+                </span>
               )}
               <Link href="/" className="btn btn-outline">
                 ← Nouvelle analyse

@@ -8,6 +8,7 @@ lxml
 
 # Report rendering
 jinja2
+weasyprint
 
 # API layer
 fastapi>=0.110.0

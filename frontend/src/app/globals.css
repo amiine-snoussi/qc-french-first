@@ -599,6 +599,35 @@ input {
   text-decoration: none;
 }
 
+.btn-pro-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: default;
+  letter-spacing: -0.01em;
+  user-select: none;
+  position: relative;
+}
+
+.pro-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid var(--border-accent);
+  letter-spacing: 0.06em;
+}
+
 /* ─── error state ────────────────────────────────────────────── */
 .error-box {
   background: var(--bad-bg);
