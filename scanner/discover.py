@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import re
 import asyncio
 import time
@@ -7,6 +8,7 @@ from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Set, Tuple
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright
+
 from .utils import normalize_url, same_domain, base_origin, absolutize
 from .platforms import detect_platform
 
@@ -24,24 +26,35 @@ _ECOM_KEY_PATH_HINTS = (
 )
 
 def _prefetch_platform(base_url: str, ua: str) -> Dict[str, Any]:
-    """Best-effort platform detection before full crawl."""
+    """
+    Best-effort platform detection before full crawl.
+    Returns platform dict +:
+      - _prefetch_html: homepage HTML (lower quality is ok, used only for probe filtering)
+      - _prefetch_final_url: final URL after redirects
+    """
+    origin = base_origin(base_url).rstrip("/")
     try:
-        origin = base_origin(base_url).rstrip("/")
-        r = requests.get(
-            origin + "/",
-            headers={"User-Agent": ua},
-            timeout=12,
-            allow_redirects=True,
-        )
+        r = requests.get(origin + "/", headers={"User-Agent": ua}, timeout=12, allow_redirects=True)
         html = r.text or ""
         final_url = r.url or (origin + "/")
-        return detect_platform(html, final_url)
+        out = detect_platform(html, final_url) or {"name": "Unknown", "confidence": 0.0}
+        out["_prefetch_html"] = html
+        out["_prefetch_final_url"] = final_url
+        return out
     except Exception:
-        return {"name": "Unknown", "confidence": 0.0}
+        return {
+            "name": "Unknown",
+            "confidence": 0.0,
+            "_prefetch_html": "",
+            "_prefetch_final_url": origin + "/",
+        }
 
 def _is_probably_page(url: str) -> bool:
     u = (url or "").lower()
-    bad_ext = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".zip", ".mp4", ".mp3", ".css", ".js", ".xml")
+    bad_ext = (
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+        ".pdf", ".zip", ".mp4", ".mp3", ".css", ".js", ".xml"
+    )
     if any(u.endswith(x) for x in bad_ext):
         return False
     if "/sitemap" in u:
@@ -72,7 +85,8 @@ def _discover_sitemaps(base_url: str, ua: str) -> List[str]:
     out, seen = [], set()
     for s in sitemaps:
         if s not in seen:
-            out.append(s); seen.add(s)
+            out.append(s)
+            seen.add(s)
     return out
 
 def _parse_sitemap(xml_text: str) -> Tuple[List[str], bool]:
@@ -165,7 +179,7 @@ async def _discover_with_playwright(base_url: str, cfg: Dict[str, Any], seed: Se
                 if (time.monotonic() - t_start) >= float(hard_timeout_s):
                     print(f"[discover/pw] HARD TIMEOUT after {hard_timeout_s}s -> returning what we have (+seed)", flush=True)
                     break
-                # IMPORTANT: don't reassign q (was causing your error)
+
                 if len(q) > max_queue:
                     del q[max_queue:]
 
@@ -258,7 +272,14 @@ def _likely_key_urls(base_url: str, key_paths: List[str], fr_variants: List[str]
         urls.add(normalize_url(origin + v))
     for v in en_variants:
         urls.add(normalize_url(origin + v))
+
+    # ✅ FORCE language landing pages for canada.ca (they may not appear in prefetch HTML)
+    if "www.canada.ca" in origin:
+        urls.add(normalize_url(origin + "/en.html"))
+        urls.add(normalize_url(origin + "/fr.html"))
+
     return urls
+
 
 def discover_urls(base_url: str, cfg: Dict[str, Any]) -> List[str]:
     crawler = cfg.get("crawler", {})
@@ -268,20 +289,45 @@ def discover_urls(base_url: str, cfg: Dict[str, Any]) -> List[str]:
     max_pages_final = int(crawler.get("max_pages", 120))
 
     # Preflight platform detection (best-effort). Used only to reduce noise from irrelevant probe paths.
-    platform = {"name": "Unknown", "confidence": 0.0}
+    platform: Dict[str, Any] = {"name": "Unknown", "confidence": 0.0, "_prefetch_html": "", "_prefetch_final_url": base_origin(base_url).rstrip("/") + "/"}
     if bool(disc.get("prefetch_platform", True)):
         platform = _prefetch_platform(base_url, ua)
 
-    key_paths = list(heur.get("key_paths", []) or [])
-    if (platform.get("name") != "Shopify") and float(platform.get("confidence") or 0.0) >= 0.75:
-        key_paths = [kp for kp in key_paths if not any(h in (kp or "") for h in _ECOM_KEY_PATH_HINTS)]
+    # PATCH 2 — stop probing key paths unless the homepage actually references them
+    home_html = (platform.get("_prefetch_html") or "")
+    home_l = home_html.lower()
 
-    seed = _likely_key_urls(
-        base_url,
-        key_paths,
-        heur.get("french_home_variants", []),
-        heur.get("english_home_variants", []),
-    )
+    def _mentioned(path: str) -> bool:
+        p = (path or "").lower()
+        return bool(p) and (p in home_l)
+
+    # Filter language variants: only include if base_url already has it OR homepage links to it
+    raw_fr_vars = list((cfg.get("heuristics", {}) or {}).get("french_home_variants", []) or [])
+    raw_en_vars = list((cfg.get("heuristics", {}) or {}).get("english_home_variants", []) or [])
+
+    fr_variants = [v for v in raw_fr_vars if (v in base_url) or _mentioned(v)]
+    en_variants = [v for v in raw_en_vars if (v in base_url) or _mentioned(v)]
+
+    # Filter key path probes: only include if homepage mentions it (or Shopify+cart)
+    heur2 = cfg.get("heuristics", {}) or {}
+    raw_key_paths = list(heur2.get("key_paths", []) or [])
+
+    is_shopifyish = (platform.get("name") == "Shopify") and ((platform.get("confidence") or 0) >= 0.5)
+
+    key_paths: List[str] = []
+    for kp in raw_key_paths:
+        if kp == "/":
+            key_paths.append(kp)
+            continue
+
+        if kp in _ECOM_KEY_PATH_HINTS:
+            if is_shopifyish or _mentioned(kp):
+                key_paths.append(kp)
+        else:
+            if _mentioned(kp):
+                key_paths.append(kp)
+
+    seed = _likely_key_urls(base_url, key_paths, fr_variants, en_variants)
 
     sitemap_pages = _collect_page_urls_from_sitemaps(base_url, ua)
     sitemap_sample = _sample_sitemap_urls(sitemap_pages, cfg)
@@ -299,11 +345,19 @@ def discover_urls(base_url: str, cfg: Dict[str, Any]) -> List[str]:
     def add(u: str):
         u = normalize_url(u)
         if u not in seen and same_domain(u, base_url) and _is_probably_page(u):
-            merged.append(u); seen.add(u)
+            merged.append(u)
+            seen.add(u)
 
-    for u in sorted(seed): add(u)
-    for u in sorted(pw_found): add(u)
-    for u in sorted(sitemap_sample): add(u)
+    for u in sorted(seed):
+        add(u)
+    for u in sorted(pw_found):
+        add(u)
+    for u in sorted(sitemap_sample):
+        add(u)
 
-    print(f"[discover] seed={len(seed)} pw={len(pw_found)} sitemap_pages={len(sitemap_pages)} sitemap_sample={len(sitemap_sample)} -> total={len(merged)} (cap {max_pages_final})", flush=True)
+    print(
+        f"[discover] seed={len(seed)} pw={len(pw_found)} sitemap_pages={len(sitemap_pages)} "
+        f"sitemap_sample={len(sitemap_sample)} -> total={len(merged)} (cap {max_pages_final})",
+        flush=True,
+    )
     return merged[:max_pages_final]

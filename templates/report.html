@@ -26,6 +26,16 @@
     a{color:#9cc5ff;text-decoration:none} a:hover{text-decoration:underline}
     .thumb{width:220px;border-radius:10px;border:1px solid var(--line);display:block}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+
+    /* NEW: issues styling */
+    .issues{margin-top:14px}
+    .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line)}
+    .pill.p0{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.35);color:var(--bad)}
+    .pill.p1{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.35);color:var(--warn)}
+    .pill.p2{background:rgba(156,197,255,.10);border-color:rgba(156,197,255,.25);color:#cfe2ff}
+    .issue-title{font-weight:800}
+    .issue-code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;color:var(--muted)}
+    .small{font-size:13px}
   </style>
 </head>
 <body>
@@ -45,6 +55,45 @@
         <span class="chip">Pairs total: <b>{{ stats.pairs.total_pairs if stats and stats.pairs else 0 }}</b></span>
         <span class="chip">Missing FR (key): <b>{{ stats.pairs.missing_fr_key if stats and stats.pairs else 0 }}</b></span>
         <span class="chip">Missing FR (total): <b>{{ stats.pairs.missing_fr_total if stats and stats.pairs else 0 }}</b></span>
+      </div>
+
+      <!-- NEW: Issues list (from coverage.json / score_site) -->
+      <div class="issues">
+        <h2 style="margin-top:16px">Issues (prioritized)</h2>
+        {% if issues and issues|length > 0 %}
+          <table>
+            <thead><tr><th>Priority</th><th>Issue</th><th>Detail</th></tr></thead>
+            <tbody>
+              {% for it in issues[:30] %}
+                {% set pr = (it.priority or it.severity or 'P2') %}
+                {% set prl = pr|string %}
+                <tr>
+                  <td>
+                    {% if prl == 'P0' %}
+                      <span class="pill p0">P0</span>
+                    {% elif prl == 'P1' %}
+                      <span class="pill p1">P1</span>
+                    {% else %}
+                      <span class="pill p2">{{ prl }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="issue-title">{{ it.title or it.code or 'Issue' }}</div>
+                    {% if it.code %}<div class="issue-code">{{ it.code }}</div>{% endif %}
+                  </td>
+                  <td class="small">{{ it.detail or '' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if issues|length > 30 %}
+            <div class="muted" style="margin-top:10px">Showing first 30 issues. Full list is in <b>coverage.json</b> and <b>summary.json</b>.</div>
+          {% else %}
+            <div class="muted" style="margin-top:10px">Also written to <b>coverage.json</b> and <b>summary.json</b> in the run folder.</div>
+          {% endif %}
+        {% else %}
+          <div class="muted">No issues reported by the coverage scorer.</div>
+        {% endif %}
       </div>
     </div>
 

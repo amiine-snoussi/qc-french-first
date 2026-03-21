@@ -1,3 +1,7 @@
+scoring:
+  min_pages_total: 15
+  min_pages_ok: 10
+  cap_score_if_insufficient: 70
 crawler:
   max_pages: 140
   max_depth: 3
@@ -14,6 +18,7 @@ crawler:
   - /checkouts/
   fast_url_contains:
   - /checkout
+
 heuristics:
   langid_min_conf: 0.82
   key_paths:
@@ -56,8 +61,10 @@ heuristics:
     chunk_min_chars: 80
     en_ratio_warn: 0.12
     sim_untranslated: 0.85
+
 output:
   keep_html_snapshots: false
+
 discover:
   use_playwright: true
   # Optional preflight GET / to guess platform and reduce irrelevant probe noise.

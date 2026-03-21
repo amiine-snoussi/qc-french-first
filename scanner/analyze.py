@@ -14,6 +14,20 @@ EN_TOKENS = ["english", "en", "en-ca", "en_ca", "anglais"]
 def _clean(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip()).lower()
 
+def _ok_fetch(page: dict) -> bool:
+    """True only for 2xx/3xx, or when status is missing but HTML exists.
+    IMPORTANT: status might be int or str (e.g. "404")."""
+    st = page.get("status")
+    st_i = None
+    try:
+        st_i = int(st)
+    except Exception:
+        st_i = None
+
+    if st_i is not None:
+        return 200 <= st_i < 400
+    return bool(page.get("html"))
+
 def _get_html_lang(soup: BeautifulSoup) -> Optional[str]:
     html = soup.find("html")
     if html and html.get("lang"):
@@ -118,19 +132,22 @@ def _derive_french_candidate(en_url: str) -> List[str]:
     if not host.startswith("fr."):
         candidates.append(f"{p.scheme}://fr.{host}{path}")
 
-    out=[]
-    seen=set()
+    out = []
+    seen = set()
     for c in candidates:
         try:
             u = normalize_url(c)
             if u not in seen:
-                out.append(u); seen.add(u)
+                out.append(u)
+                seen.add(u)
         except Exception:
             pass
     return out
 
+# PATCHED: home label matches /, /en, /fr, /en-ca, /fr-ca, etc.
+# (_key_type strips trailing slash already, so /en/ becomes /en)
 KEY_LABELS = [
-    ("home", re.compile(r"/$")),
+    ("home", re.compile(r"^/(?:$|en(?:-[a-z]{2})?|fr(?:-[a-z]{2})?)$")),
     ("contact", re.compile(r"/contact(-us)?$")),
     ("about", re.compile(r"/about(-us)?$")),
     ("services", re.compile(r"/services?$|/service$")),
@@ -160,8 +177,22 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
         p["norm_url"] = nu
         by_url[nu] = p
 
+    # PATCH 2 — choose "home" based on what the user actually started scanning
+    start_url_n = normalize_url(base_url)
+    start_path = urlparse(start_url_n).path or "/"
+
     origin = base_origin(base_url).rstrip("/")
-    home_candidates = [normalize_url(origin + "/"), normalize_url(base_url)]
+    origin_home_n = normalize_url(origin + "/")
+
+    # If user started at a non-root path (e.g. /en), treat that as "home"
+    home_target_n = start_url_n if start_path != "/" else origin_home_n
+
+    # pick a representative home page for platform + signals
+    home_candidates = []
+    for u in (home_target_n, start_url_n, origin_home_n):
+        if u and u not in home_candidates:
+            home_candidates.append(u)
+
     home_page = None
     for c in home_candidates:
         if c in by_url:
@@ -170,7 +201,7 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
     if home_page is None and pages:
         home_page = pages[0]
 
-    platform = detect_platform(home_page.get("html",""), home_page.get("final_url",""))
+    platform = detect_platform(home_page.get("html", ""), home_page.get("final_url", ""))
 
     analyzed_pages: List[Dict[str, Any]] = []
     for p in pages:
@@ -181,7 +212,7 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
         alt = _get_hreflang_alternates(soup)
         sw = _find_switch_links(soup, p.get("final_url") or p.get("url") or base_url)
 
-        guess, conf = _lang_guess(p.get("text","") or "", min_conf=min_conf)
+        guess, conf = _lang_guess(p.get("text", "") or "", min_conf=min_conf)
         if html_lang:
             if html_lang.startswith("fr"):
                 guess, conf = "fr", 0.99
@@ -202,15 +233,16 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
             fr_candidates.append(normalize_url(fr_from_switch))
         fr_candidates.extend(_derive_french_candidate(p["norm_url"]))
 
-        uniq=[]
-        seen=set()
+        uniq = []
+        seen = set()
         for u in fr_candidates:
             if u and same_domain(u, base_url) and u not in seen:
-                uniq.append(u); seen.add(u)
+                uniq.append(u)
+                seen.add(u)
 
         fr_present_url = None
         for cand in uniq:
-            if cand in by_url and (by_url[cand].get("status") in (200, 201, 202, 204) or by_url[cand].get("html")):
+            if cand in by_url and _ok_fetch(by_url.get(cand) or {}):
                 fr_present_url = cand
                 break
 
@@ -258,11 +290,26 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
             "hreflang": alt,
         })
 
+    def _status_ok_for_keypage(ap: dict) -> bool:
+        st = ap.get("status")
+        try:
+            st_i = int(st)
+        except Exception:
+            st_i = None
+        return (st_i is not None) and (st_i < 400)
+
+    # PATCH 3 — never treat a 4xx/5xx page as a key page
+    # Key pages (best available instance for each type)
     key_pages: Dict[str, Dict[str, Any]] = {}
     for ap in analyzed_pages:
+        # Only consider real pages (2xx/3xx)
+        if not _status_ok_for_keypage(ap):
+            continue
+
         kt = ap.get("key_type")
         if not kt:
             continue
+
         cur = key_pages.get(kt)
         if cur is None:
             key_pages[kt] = ap
@@ -272,14 +319,40 @@ def analyze_site(base_url: str, pages: List[Dict[str, Any]], cfg: Dict[str, Any]
             if (s2 == 200 and s1 != 200):
                 key_pages[kt] = ap
 
+    # PATCH 2 (continued) — force key_pages["home"] to match start URL when start URL is not "/"
+    # Only use origin "/" as home when user started at "/".
+    forced_home_src = None
+    for ap in analyzed_pages:
+        if ap.get("norm_url") == home_target_n and _status_ok_for_keypage(ap):
+            forced_home_src = ap
+            break
+
+    if forced_home_src is None:
+        cur_home = key_pages.get("home")
+        if isinstance(cur_home, dict) and _status_ok_for_keypage(cur_home):
+            forced_home_src = cur_home
+
+    if forced_home_src is not None:
+        forced_home = dict(forced_home_src)  # do not mutate analyzed_pages
+        forced_home["key_type"] = "home"
+        forced_home["url"] = home_target_n
+        forced_home["final_url"] = home_target_n
+        forced_home["norm_url"] = home_target_n
+        key_pages["home"] = forced_home
+
     # home switch location
     home_switch_loc = "none"
+    home_n = home_target_n
     if home_page:
-        home_n = normalize_url(home_page.get("final_url") or home_page.get("url") or base_url)
-        for ap in analyzed_pages:
-            if ap["norm_url"] == home_n:
-                home_switch_loc = (ap.get("switch") or {}).get("location", "none")
-                break
+        try:
+            home_n = normalize_url(home_page.get("final_url") or home_page.get("url") or home_n)
+        except Exception:
+            pass
+
+    for ap in analyzed_pages:
+        if ap["norm_url"] == home_n:
+            home_switch_loc = (ap.get("switch") or {}).get("location", "none")
+            break
 
     return {
         "base_url": base_url,

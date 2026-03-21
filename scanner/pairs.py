@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Dict, Any, List
 from urllib.parse import urlparse, urlunparse
 
-EN_PREFIXES = ["/en-ca", "/en-us", "/en"]
-FR_PREFIXES = ["/fr-ca", "/fr"]
+EN_PREFIXES = ["/en-ca", "/en-us", "/en", "/en.html"]
+FR_PREFIXES = ["/fr-ca", "/fr", "/fr.html"]
 
 KEY_TYPES_P0 = {"home", "cart", "checkout", "contact"}
 KEY_TYPES_P1 = {"products", "services", "faq", "returns", "about"}
@@ -40,7 +40,16 @@ def _strip_lang(path: str) -> str:
             return path2
     return path
 
+# Patch B (recommended): set lang based on path including .html
+# ✅ Replace your current _lang_from_path with THIS (in pairs.py)
+
 def _lang_from_path(path: str) -> str | None:
+    # Canada-style language roots
+    if path == "/fr.html":
+        return "fr"
+    if path == "/en.html":
+        return "en"
+
     for pref in FR_PREFIXES:
         if path == pref or path.startswith(pref + "/"):
             return "fr"
@@ -48,6 +57,7 @@ def _lang_from_path(path: str) -> str | None:
         if path == pref or path.startswith(pref + "/"):
             return "en"
     return None
+
 
 def _pick_best(urls: List[str], prefer_prefixes: List[str]) -> str | None:
     if not urls:
@@ -117,7 +127,8 @@ def build_pairs(pages: List[Dict[str, Any]], base_url: str) -> Dict[str, Any]:
     total_pairs = 0
 
     for core, g in groups.items():
-        en_best = _pick_best(g["en"], prefer_prefixes=["/"] + EN_PREFIXES)
+        # Patch A (must): prefer /en.html over /
+        en_best = _pick_best(g["en"], prefer_prefixes=EN_PREFIXES + ["/"])
         fr_best = _pick_best(g["fr"], prefer_prefixes=FR_PREFIXES)
 
         if not en_best and not fr_best:

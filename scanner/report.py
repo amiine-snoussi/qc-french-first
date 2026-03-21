@@ -6,6 +6,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from scanner.utils import normalize_url
 
 
 def _atomic_json_dump(path: str, obj) -> None:
@@ -280,10 +281,27 @@ def _build_key_pages_from_findings(findings: dict) -> list[dict]:
     if not isinstance(key_pages, dict):
         return []
 
+    # --- Patch: status_by_url map + include en_status / fr_status_code in rows ---
+    pages = findings.get("pages", []) or []
+    status_by_url: dict[str, int] = {}
+    for p in pages:
+        if not isinstance(p, dict):
+            continue
+        u = (p.get("final_url") or p.get("url") or "").strip()
+        if not u:
+            continue
+        try:
+            u = normalize_url(u)
+            status_by_url[u] = int(p.get("status"))
+        except Exception:
+            pass
+    # ---------------------------------------------------------------------------
+
     out: list[dict] = []
     for key, kp in key_pages.items():
         if not isinstance(kp, dict):
             continue
+
         fr = kp.get("french") or {}
         fr_status = fr.get("status") or "missing"
         if isinstance(fr_status, str):
@@ -291,20 +309,61 @@ def _build_key_pages_from_findings(findings: dict) -> list[dict]:
         else:
             fr_status = "missing"
 
+        # URLs
+        en_url = kp.get("final_url") or kp.get("url") or kp.get("norm_url")
+        fr_url = fr.get("url")
+
+        try:
+            en_url_n = normalize_url(en_url) if en_url else None
+        except Exception:
+            en_url_n = en_url
+
+        try:
+            fr_url_n = normalize_url(fr_url) if fr_url else None
+        except Exception:
+            fr_url_n = fr_url
+
+        # Status codes (from crawl pages list)
+        en_status = status_by_url.get(en_url_n) if en_url_n else None
+        fr_status_code = status_by_url.get(fr_url_n) if fr_url_n else None
+
+        # Fallback: if confirm step stored status inside key_pages findings
+        if fr_status_code is None:
+            try:
+                fr_status_code = int(fr.get("status_code") or fr.get("http_status") or 0) or None
+            except Exception:
+                pass
+
+        # Default status based on FR
         if fr_status == "present":
             st = "ok"
+            note = ""
         elif fr_status == "candidate":
-            st = "candidate_fr"
+            # if we actually fetched it and it’s good, treat as ok
+            if fr_status_code and fr_status_code < 400:
+                st = "ok"
+            else:
+                st = "candidate_fr"
+            note = ""
         else:
             st = "missing_fr"
+            note = ""
+
+        # Patch: if EN doesn't exist / is not reachable, mark as not applicable
+        if en_status is None or en_status >= 400:
+            st = "skip_en"
+            note = "EN key page not reachable (>=400), not applicable"
 
         out.append(
             {
                 "key": key,
                 "priority": _priority_for_key_type(key),
                 "status": st,
-                "en_url": kp.get("final_url") or kp.get("url") or kp.get("norm_url"),
-                "fr_url": fr.get("url"),
+                "note": note,
+                "en_url": en_url,
+                "en_status": en_status,
+                "fr_url": fr_url if fr_status in ("present", "candidate") else None,
+                "fr_status_code": fr_status_code,
                 "screenshot": kp.get("screenshot_path") or kp.get("screenshot"),
             }
         )
@@ -330,8 +389,8 @@ def _build_diagnostics_from_findings(base_url: str, findings: dict) -> dict:
     diag["stats"]["pairs"] = extras["pairs"]
     diag["fix_first"] = extras["fix_first"]
     diag["pairs_sample"] = pairs_rows[:300]
-
     diag["key_pages"] = _build_key_pages_from_findings(findings)
+    diag["pages"] = findings.get("pages", []) or []
     return diag
 
 
@@ -370,7 +429,7 @@ def _ensure_stats(diag: dict, findings) -> dict:
         merged["lang"] = basic["lang"]
     if not isinstance(merged.get("pairs"), dict):
         merged["pairs"] = basic["pairs"]
-
+    
     diag["stats"] = merged
     return diag
 
@@ -456,6 +515,21 @@ def render_report(base_url: str, findings, scored, run_dir: str, cfg: dict) -> s
     diag = _normalize_screenshot_fields(diag, run_dir, root)
 
     score, score_label = _coverage_score(diag)
+
+    # PATCH: Prefer canonical score computed by scanner.score.score_site()
+    # (stored as coverage.json) so report.html/summary.json match coverage gates.
+    issues = []
+    if isinstance(coverage_diag, dict):
+        if coverage_diag.get("score") is not None:
+            try:
+                score = int(coverage_diag.get("score"))
+            except Exception:
+                pass
+        if coverage_diag.get("label") is not None:
+            score_label = str(coverage_diag.get("label"))
+        issues = coverage_diag.get("issues") or []
+    # --- end PATCH ---
+
     signals = _make_signals(diag)
 
     generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -477,6 +551,8 @@ def render_report(base_url: str, findings, scored, run_dir: str, cfg: dict) -> s
         "fix_first": diag.get("fix_first", []) or [],
         "key_pages": diag.get("key_pages", []) or [],
         "pairs_sample": diag.get("pairs_sample", []) or [],
+        "pairs": findings.get("pairs", {}) if isinstance(findings, dict) else {},
+        "issues": issues,
     }
     _atomic_json_dump(os.path.join(run_dir, "summary.json"), summary)
 
@@ -510,6 +586,7 @@ def render_report(base_url: str, findings, scored, run_dir: str, cfg: dict) -> s
         key_rows=summary["key_pages"],     # alias for your template
         pairs_sample=summary["pairs_sample"],
         pairs_rows=pairs_rows,             # alias for your template
+        issues=issues,
     )
 
     out_path = os.path.join(run_dir, "report.html")

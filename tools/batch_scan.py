@@ -1,166 +1,87 @@
 #!/usr/bin/env python3
-"""Batch scan a list of URLs and write a leads CSV.
-
-Usage:
-  python tools/batch_scan.py urls.txt --max_pages 60 --out leads.csv
-
-Notes:
-- Runs scans sequentially (safe/default). If you want speed, run multiple terminals.
-- Output is designed for selling: you get PASS/FAIL + key missing count + report path.
-"""
-
 from __future__ import annotations
 
 import argparse
-import csv
-import glob
-import json
-import os
-import subprocess
-from dataclasses import dataclass
-from urllib.parse import urlparse
+import sys
+import time
+from pathlib import Path
+
+# ✅ Make repo root importable so `import main` works even when running from ./tools/
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# import your main entrypoint (main.py at repo root)
+import main as app_main
 
 
-def _host_from_url(u: str) -> str:
-    host = urlparse(u).netloc
-    if host:
-        return host
-    # allow passing bare domains
-    return u.replace("https://", "").replace("http://", "").split("/")[0]
+def read_urls(path: str) -> list[str]:
+    p = Path(path)
+    if not p.exists():
+        raise SystemExit(f"[batch] urls file not found: {path}")
+    urls: list[str] = []
+    for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        urls.append(s)
+
+    # de-dupe, keep order
+    seen: set[str] = set()
+    out: list[str] = []
+    for u in urls:
+        if u not in seen:
+            out.append(u)
+            seen.add(u)
+    return out
 
 
-def pick_latest_run_dir(host: str) -> str | None:
-    dirs = sorted([p for p in glob.glob(f"runs/{host}/*") if os.path.isdir(p)])
-    return dirs[-1] if dirs else None
-
-
-def _load_json(path: str) -> dict:
+def run_one(url: str, max_pages: int) -> int:
+    # run main.py as if invoked from CLI
+    sys.argv = ["main.py", "--url", url, "--max_pages", str(max_pages)]
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _verdict(diag: dict) -> tuple[str, int]:
-    s = diag.get("stats", {}) or {}
-    pairs = s.get("pairs", {}) or {}
-    lang = s.get("lang", {}) or {}
-
-    missing_key = int(pairs.get("missing_fr_key", 0) or 0)
-    fr_pages = int(lang.get("fr", 0) or 0)
-
-    if fr_pages == 0:
-        return "FAIL (no FR)", 1
-    if missing_key > 0:
-        return f"FAIL ({missing_key} key missing FR)", 1
-    return "PASS", 0
-
-
-@dataclass
-class Row:
-    url: str
-    host: str
-    verdict: str
-    pages_total: int
-    fr_pages: int
-    en_pages: int
-    missing_fr_key: int
-    missing_fr_total: int
-    score: int
-    report_path: str
-    run_dir: str
+        app_main.main()
+        return 0
+    except SystemExit as e:
+        # if your main uses sys.exit(...)
+        return int(e.code) if isinstance(e.code, int) else 1
+    except Exception as e:
+        print(f"[batch] ❌ exception on {url}: {type(e).__name__}: {e}", flush=True)
+        return 2
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Batch scan URLs and export leads.csv")
-    ap.add_argument("urls_file", help="Text file: one URL per line")
-    ap.add_argument("--max_pages", type=int, default=80)
-    ap.add_argument("--out", default="leads.csv")
+    ap = argparse.ArgumentParser(description="Batch scan a list of URLs (one per line).")
+    ap.add_argument("urls_file", help="Text file with one URL per line")
+    ap.add_argument("--max_pages", type=int, default=60)
+    ap.add_argument("--sleep_s", type=float, default=0.0, help="Optional sleep between scans")
     args = ap.parse_args()
 
-    with open(args.urls_file, "r", encoding="utf-8") as f:
-        urls = [ln.strip() for ln in f.readlines()]
-    urls = [u for u in urls if u and not u.startswith("#")]
+    urls = read_urls(args.urls_file)
+    if not urls:
+        raise SystemExit("[batch] no URLs found in file")
 
-    rows: list[Row] = []
+    print(f"[batch] loaded {len(urls)} urls from {args.urls_file}", flush=True)
 
-    for u in urls:
-        host = _host_from_url(u)
-        print(f"\n=== SCAN {host} ===")
+    failures = 0
+    for i, u in enumerate(urls, 1):
+        print("\n" + "=" * 90, flush=True)
+        print(f"[batch] ({i}/{len(urls)}) SCAN {u}", flush=True)
+        t0 = time.monotonic()
+        code = run_one(u, args.max_pages)
+        dt = time.monotonic() - t0
+        print(f"[batch] ({i}/{len(urls)}) DONE exit={code} in {dt:.1f}s :: {u}", flush=True)
 
-        # Run the normal pipeline
-        cmd = ["python", "main.py", "--url", u, "--max_pages", str(args.max_pages)]
-        proc = subprocess.run(cmd)
-        if proc.returncode != 0:
-            print(f"[batch] scan failed (exit={proc.returncode}) for {u}")
+        if code != 0:
+            failures += 1
+        if args.sleep_s:
+            time.sleep(args.sleep_s)
 
-        run_dir = pick_latest_run_dir(host) or ""
-        report_path = os.path.join(run_dir, "report.html") if run_dir else ""
-        diag_path = os.path.join(run_dir, "diagnostics.json") if run_dir else ""
-        coverage_path = os.path.join(run_dir, "coverage.json") if run_dir else ""
-
-        diag = _load_json(diag_path) if diag_path and os.path.exists(diag_path) else {}
-        cov = _load_json(coverage_path) if coverage_path and os.path.exists(coverage_path) else {}
-
-        s = diag.get("stats", {}) or {}
-        pairs = s.get("pairs", {}) or {}
-        lang = s.get("lang", {}) or {}
-
-        verdict, _ = _verdict(diag)
-        score = int(cov.get("score", 0) or 0) if isinstance(cov, dict) else 0
-
-        row = Row(
-            url=u,
-            host=host,
-            verdict=verdict,
-            pages_total=int(s.get("pages_total", 0) or 0),
-            fr_pages=int(lang.get("fr", 0) or 0),
-            en_pages=int(lang.get("en", 0) or 0),
-            missing_fr_key=int(pairs.get("missing_fr_key", 0) or 0),
-            missing_fr_total=int(pairs.get("missing_fr_total", 0) or 0),
-            score=score,
-            report_path=report_path,
-            run_dir=run_dir,
-        )
-        rows.append(row)
-
-    # Write CSV
-    with open(args.out, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(
-            [
-                "url",
-                "host",
-                "verdict",
-                "score",
-                "pages_total",
-                "fr_pages",
-                "en_pages",
-                "missing_fr_key",
-                "missing_fr_total",
-                "run_dir",
-                "report_path",
-            ]
-        )
-        for r in rows:
-            w.writerow(
-                [
-                    r.url,
-                    r.host,
-                    r.verdict,
-                    r.score,
-                    r.pages_total,
-                    r.fr_pages,
-                    r.en_pages,
-                    r.missing_fr_key,
-                    r.missing_fr_total,
-                    r.run_dir,
-                    r.report_path,
-                ]
-            )
-
-    print(f"\n✅ Wrote {len(rows)} rows to {args.out}")
+    print("\n" + "=" * 90, flush=True)
+    if failures:
+        print(f"[batch] FINISHED with {failures} failures", flush=True)
+        raise SystemExit(1)
+    print("[batch] FINISHED OK", flush=True)
 
 
 if __name__ == "__main__":

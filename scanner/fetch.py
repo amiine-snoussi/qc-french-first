@@ -4,26 +4,34 @@ import time
 import os
 from typing import Dict, Any, List, Tuple
 from playwright.async_api import async_playwright
+from scanner.utils import norm_url
 from .utils import ensure_dir, safe_filename, normalize_url, base_origin
+
 
 def _run_dir(base_url: str) -> str:
     domain = base_origin(base_url).replace("https://", "").replace("http://", "")
     stamp = time.strftime("%Y-%m-%d_%H%M%S")
     return os.path.join("runs", domain, stamp)
 
+
 def _is_skip_url(url: str, skip_contains: List[str]) -> bool:
     u = (url or "").lower()
     return any(s.lower() in u for s in skip_contains)
+
 
 def _is_fast_url(url: str, fast_contains: List[str]) -> bool:
     u = (url or "").lower()
     return any(s.lower() in u for s in fast_contains)
 
+
 async def _fetch_one(context, idx: int, total: int, url: str, out_dir: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     crawler = cfg.get("crawler", {})
-    timeout_ms = int(crawler.get("timeout_ms", 25000))
     fast_contains = crawler.get("fast_url_contains", ["/checkout"])
     page = await context.new_page()
+
+    # A) Default timeouts (prevent infinite loads)
+    page.set_default_navigation_timeout(20000)  # 20s
+    page.set_default_timeout(20000)            # 20s for clicks/waits too
 
     t0 = time.monotonic()
     print(f"[fetch {idx}/{total}] {url}", flush=True)
@@ -39,11 +47,8 @@ async def _fetch_one(context, idx: int, total: int, url: str, out_dir: str, cfg:
         # If it's a "fast" URL (e.g. /checkout), do minimal waiting
         is_fast = _is_fast_url(url, fast_contains)
 
-        resp = await page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=min(timeout_ms, 12000) if is_fast else timeout_ms,
-        )
+        # B) Use domcontentloaded (not networkidle) + explicit timeout
+        resp = await page.goto(url, wait_until="domcontentloaded", timeout=20000)
 
         if resp is not None:
             status = resp.status
@@ -88,12 +93,20 @@ async def _fetch_one(context, idx: int, total: int, url: str, out_dir: str, cfg:
     dt = time.monotonic() - t0
     if err:
         print(f"[fetch {idx}/{total}] ❌ error in {dt:.1f}s :: {err[:160]}", flush=True)
+        url_n = norm_url(url)
+        final_n = norm_url(final_url)
     else:
-        print(f"[fetch {idx}/{total}] ✅ status={status} in {dt:.1f}s -> {final_url}", flush=True)
+        url_n = norm_url(url)
+        final_n = norm_url(final_url)
+        print(
+            f"[fetch {idx}/{total}] ✅ status={status} in {dt:.1f}s "
+            f"url={url_n} final={final_n}",
+            flush=True,
+        )
 
     return {
-        "url": url,
-        "final_url": final_url,
+        "url": url_n,
+        "final_url": final_n,
         "status": status,
         "error": err,
         "html": html,
@@ -101,11 +114,15 @@ async def _fetch_one(context, idx: int, total: int, url: str, out_dir: str, cfg:
         "screenshot_path": screenshot_path,
     }
 
+
 async def _fetch_all_async(base_url: str, urls: List[str], cfg: Dict[str, Any], out_dir: str) -> List[Dict[str, Any]]:
     crawler = cfg.get("crawler", {})
     concurrency = int(crawler.get("concurrency", 6))
     ua = crawler.get("user_agent", "QC-FrenchFirst-Scanner/1.0")
-    hard_timeout_s = int(crawler.get("hard_timeout_s", 35))
+
+    # C) Hard “total per URL” watchdog (cap at 25s)
+    hard_timeout_s = min(int(crawler.get("hard_timeout_s", 25)), 25)
+
     skip_contains = crawler.get("skip_url_contains", ["/checkouts/"])  # deep Shopify checkout
     total = len(urls)
 
@@ -122,9 +139,10 @@ async def _fetch_all_async(base_url: str, urls: List[str], cfg: Dict[str, Any], 
         async def bounded(i: int, u: str) -> Dict[str, Any]:
             if _is_skip_url(u, skip_contains):
                 print(f"[fetch {i}/{total}] ⏭️  skipped (matches skip list): {u}", flush=True)
+                u_n = norm_url(u)
                 return {
-                    "url": u,
-                    "final_url": u,
+                    "url": u_n,
+                    "final_url": u_n,
                     "status": None,
                     "error": "skipped",
                     "html": "",
@@ -140,9 +158,10 @@ async def _fetch_all_async(base_url: str, urls: List[str], cfg: Dict[str, Any], 
                     )
                 except asyncio.TimeoutError:
                     print(f"[fetch {i}/{total}] ⏱️  HARD TIMEOUT after {hard_timeout_s}s: {u}", flush=True)
+                    u_n = norm_url(u)
                     return {
-                        "url": u,
-                        "final_url": u,
+                        "url": u_n,
+                        "final_url": u_n,
                         "status": None,
                         "error": f"hard-timeout-{hard_timeout_s}s",
                         "html": "",
@@ -150,11 +169,12 @@ async def _fetch_all_async(base_url: str, urls: List[str], cfg: Dict[str, Any], 
                         "screenshot_path": "",
                     }
 
-        pages = await asyncio.gather(*[bounded(i+1, u) for i, u in enumerate(urls)])
+        pages = await asyncio.gather(*[bounded(i + 1, u) for i, u in enumerate(urls)])
 
         await context.close()
         await browser.close()
         return pages
+
 
 def fetch_all(base_url: str, urls: List[str], cfg: Dict[str, Any], out_dir: str | None = None) -> Tuple[List[Dict[str, Any]], str]:
     """Fetch a list of URLs.
