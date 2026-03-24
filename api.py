@@ -290,9 +290,16 @@ class ScanRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize jobs database
-    _init_jobs_db()
+    try:
+        _init_jobs_db()
+    except Exception as e:
+        import sys
+        print(f"WARNING: DB init failed, falling back to SQLite: {e}", file=sys.stderr)
+        global _USE_PG, DATABASE_URL
+        _USE_PG = False
+        _init_jobs_db()
     yield
+    
 app = FastAPI(
     title="QC French-First Scanner API",
     description="Scan any Quebec website for Bill 96 compliance.",
