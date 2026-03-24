@@ -52,21 +52,57 @@ CONFIG_PATH = BASE_DIR / "config.yml"
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── job store (SQLite) ─────────────────────────────────────────────────────────
+# ── job store (Postgres when DATABASE_URL is set, SQLite fallback) ─────────────
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_USE_PG = DATABASE_URL.startswith("postgres")
 _db_lock = threading.Lock()
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(JOBS_DB), check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _get_conn():
+    """Return a DB connection. Postgres if DATABASE_URL is set, else SQLite."""
+    if _USE_PG:
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        conn.autocommit = False
+        return conn
+    else:
+        conn = sqlite3.connect(str(JOBS_DB), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def _ph(name: str = "") -> str:
+    """Return the placeholder syntax for the current DB engine."""
+    return "%s" if _USE_PG else "?"
+
+
+def _now_expr() -> str:
+    """SQL expression for current timestamp."""
+    return "NOW()" if _USE_PG else "datetime('now')"
 
 
 def _init_jobs_db() -> None:
     JOBS_DB.parent.mkdir(parents=True, exist_ok=True)
-    with _db_lock:
-        conn = _get_conn()
-        conn.execute("""
+    now = _now_expr()
+    # Postgres uses TIMESTAMP, SQLite uses TEXT — both work
+    ddl = f"""
+        CREATE TABLE IF NOT EXISTS jobs (
+            job_id      TEXT PRIMARY KEY,
+            url         TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'queued',
+            score       INTEGER,
+            label       TEXT,
+            issues_json TEXT,
+            report_path TEXT,
+            error       TEXT,
+            created_at  TEXT DEFAULT {("''" if _USE_PG else f"({now})")},
+            updated_at  TEXT DEFAULT {("''" if _USE_PG else f"({now})")}
+        )
+    """
+    if _USE_PG:
+        # Postgres: use TIMESTAMP with proper defaults
+        ddl = """
             CREATE TABLE IF NOT EXISTS jobs (
                 job_id      TEXT PRIMARY KEY,
                 url         TEXT NOT NULL,
@@ -76,42 +112,60 @@ def _init_jobs_db() -> None:
                 issues_json TEXT,
                 report_path TEXT,
                 error       TEXT,
-                created_at  TEXT DEFAULT (datetime('now')),
-                updated_at  TEXT DEFAULT (datetime('now'))
+                created_at  TIMESTAMP DEFAULT NOW(),
+                updated_at  TIMESTAMP DEFAULT NOW()
             )
-        """)
+        """
+    with _db_lock:
+        conn = _get_conn()
+        conn.execute(ddl) if not _USE_PG else conn.cursor().execute(ddl)
         conn.commit()
         conn.close()
 
 
 def _upsert_job(job_id: str, **fields) -> None:
-    set_clauses = ", ".join(f"{k} = ?" for k in fields)
+    ph = _ph()
+    now = _now_expr()
+    set_clauses = ", ".join(f"{k} = {ph}" for k in fields)
     values = list(fields.values()) + [job_id]
+    sql = f"UPDATE jobs SET {set_clauses}, updated_at = {now} WHERE job_id = {ph}"
     with _db_lock:
         conn = _get_conn()
-        conn.execute(
-            f"UPDATE jobs SET {set_clauses}, updated_at = datetime('now') WHERE job_id = ?",
-            values,
-        )
+        cur = conn.cursor() if _USE_PG else conn
+        cur.execute(sql, values)
         conn.commit()
         conn.close()
 
 
-def _get_job(job_id: str) -> Optional[sqlite3.Row]:
+def _get_job(job_id: str) -> Optional[Dict[str, Any]]:
+    ph = _ph()
     with _db_lock:
         conn = _get_conn()
-        row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+        if _USE_PG:
+            import psycopg2.extras
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(f"SELECT * FROM jobs WHERE job_id = {ph}", (job_id,))
+            row = cur.fetchone()
+        else:
+            row = conn.execute(f"SELECT * FROM jobs WHERE job_id = {ph}", (job_id,)).fetchone()
         conn.close()
+    # Normalize sqlite3.Row → dict for uniform access
+    if row is not None and not isinstance(row, dict):
+        row = dict(row)
     return row
 
 
 def _create_job(job_id: str, url: str) -> None:
+    ph = _ph()
+    now = _now_expr()
+    if _USE_PG:
+        sql = f"INSERT INTO jobs (job_id, url, status, created_at, updated_at) VALUES ({ph}, {ph}, 'queued', {now}, {now})"
+    else:
+        sql = f"INSERT INTO jobs (job_id, url, status) VALUES ({ph}, {ph}, 'queued')"
     with _db_lock:
         conn = _get_conn()
-        conn.execute(
-            "INSERT INTO jobs (job_id, url, status) VALUES (?, ?, 'queued')",
-            (job_id, url),
-        )
+        cur = conn.cursor() if _USE_PG else conn
+        cur.execute(sql, (job_id, url))
         conn.commit()
         conn.close()
 
@@ -274,8 +328,8 @@ def get_scan(job_id: str) -> Dict[str, Any]:
         "job_id":     row["job_id"],
         "url":        row["url"],
         "status":     row["status"],
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
+        "created_at": str(row["created_at"] or ""),
+        "updated_at": str(row["updated_at"] or ""),
     }
 
     if row["status"] == "done":
